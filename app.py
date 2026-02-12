@@ -5,266 +5,284 @@ import plotly.graph_objects as go
 import ta
 import feedparser
 
-# --- הגדרת עמוד (חייב להיות ראשון) ---
-st.set_page_config(page_title="Pro Breakout Terminal", layout="wide", page_icon="🚀")
+# --- 1. הגדרת עמוד (חייב להיות ראשון) ---
+st.set_page_config(page_title="FutureTrade AI", layout="wide", page_icon="💎")
 
-# --- עיצוב CSS (Dark Mode + Ticker Fix) ---
+# --- 2. עיצוב חדשני (Glassmorphism & Neon) ---
 st.markdown("""
 <style>
-    /* רקע שחור */
-    .stApp { background-color: #080808; color: #e0e0e0; }
-    
+    /* ייבוא פונט טכנולוגי */
+    @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@300;600&display=swap');
+
+    /* רקע ראשי - גרדיאנט עמוק */
+    .stApp {
+        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+        color: #ffffff;
+        font-family: 'Exo 2', sans-serif;
+    }
+
     /* הסתרת תפריטים */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
-    /* --- תיקון הפס הרץ (Ticker) --- */
+    /* --- טיקר (פס רץ) איטי ואלגנטי --- */
     .ticker-container {
         width: 100%;
-        height: 50px;
-        background-color: #000;
-        border-bottom: 2px solid #00ff41;
-        border-top: 1px solid #333;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         overflow: hidden;
         white-space: nowrap;
-        position: relative;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        padding: 12px 0;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
     }
     .ticker-text {
         display: inline-block;
-        font-family: 'Courier New', monospace;
-        font-size: 18px;
-        font-weight: bold;
-        color: #00ff41;
-        padding-top: 12px;
-        animation: scroll-left 25s linear infinite; /* אנימציה רציפה */
+        font-size: 16px;
+        color: #00d2ff; /* טורקיז ניאון */
+        letter-spacing: 1px;
+        animation: scroll 60s linear infinite; /* איטי מאוד */
     }
-    @keyframes scroll-left {
+    .ticker-container:hover .ticker-text {
+        animation-play-state: paused; /* עוצר כשעוברים עם העכבר */
+        cursor: help;
+    }
+    @keyframes scroll {
         0% { transform: translateX(100%); }
         100% { transform: translateX(-100%); }
     }
-    .ticker-container:hover .ticker-text {
-        animation-play-state: paused; /* עוצר במעבר עכבר */
+
+    /* --- כרטיסיות זכוכית (Glass Cards) --- */
+    div[data-testid="metric-container"], .news-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    div[data-testid="metric-container"]:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+        border: 1px solid rgba(0, 210, 255, 0.5);
     }
 
-    /* כרטיסיות */
-    div[data-testid="metric-container"] {
-        background-color: #111;
-        border: 1px solid #333;
-        padding: 10px;
-        border-radius: 8px;
-        border-left: 4px solid #00ff41;
+    /* --- כותרות --- */
+    h1, h2, h3 {
+        color: #ffffff !important;
+        text-shadow: 0 0 10px rgba(0, 210, 255, 0.7);
+        font-weight: 600;
+        letter-spacing: 1px;
     }
-    
-    /* טבלאות */
-    .stDataFrame { border: 1px solid #333; }
-    
-    /* כפתורים */
+
+    /* --- כפתורים זוהרים --- */
     .stButton > button {
-        background-color: #00ff41;
-        color: black;
+        background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 12px 24px;
         font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+        width: 100%;
+    }
+    .stButton > button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 0 25px rgba(0, 210, 255, 0.6);
+    }
+
+    /* טאבים */
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] {
+        background-color: rgba(255,255,255,0.05);
+        border-radius: 10px;
+        color: #aaa;
         border: none;
     }
-    .stButton > button:hover { background-color: #00cc33; }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+        color: white;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- פונקציות ליבה ---
+# --- 3. פונקציות ליבה (Backend) ---
 
 @st.cache_data(ttl=600)
-def get_google_news_us_hebrew():
-    """חדשות כלכליות מארהב בעברית"""
-    url = "https://news.google.com/rss/search?q=וול+סטריט+OR+נאסדק+OR+הפדרל+ריזרב&hl=he&gl=IL&ceid=IL:he"
-    try:
-        feed = feedparser.parse(url)
-        return feed.entries[:5]
-    except: return []
-
-def get_ticker_string():
-    """יוצר מחרוזת לטיקר"""
-    # סמלים של מדדים וקריפטו
-    symbols = ['^GSPC', '^IXIC', 'BTC-USD', 'ETH-USD', 'NVDA', 'TSLA', 'AAPL']
-    display_map = {'^GSPC': 'S&P500', '^IXIC': 'NASDAQ', 'BTC-USD': 'BITCOIN'}
+def get_market_sentiment():
+    """מייצר את הטיקר"""
+    tickers = ['^GSPC', '^IXIC', 'BTC-USD', 'ETH-USD', 'NVDA', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL']
+    display = {'^GSPC': 'S&P 500', '^IXIC': 'NASDAQ', 'BTC-USD': 'BITCOIN', 'ETH-USD': 'ETHEREUM'}
     
-    text_parts = []
+    text = ""
     try:
-        data = yf.download(symbols, period="1d", progress=False)
-        for sym in symbols:
+        data = yf.download(tickers, period="1d", progress=False)
+        for t in tickers:
             try:
-                # טיפול במבנה הנתונים של yfinance (לפעמים רב-שכבתי)
-                if len(symbols) > 1:
-                    price = data['Close'][sym].iloc[-1]
-                    prev = data['Open'][sym].iloc[0]
+                # טיפול במבנה נתונים
+                if len(tickers) > 1:
+                    price = data['Close'][t].iloc[-1]
+                    prev = data['Open'][t].iloc[0]
                 else:
                     price = data['Close'].iloc[-1]
                     prev = data['Open'].iloc[0]
-                
+                    
                 change = ((price - prev) / prev) * 100
-                arrow = "▲" if change >= 0 else "▼"
-                name = display_map.get(sym, sym)
-                text_parts.append(f"{name}: ${price:,.2f} ({arrow}{change:.2f}%)")
+                symbol = "▲" if change >= 0 else "▼"
+                name = display.get(t, t)
+                text += f"{name}: ${price:,.2f} ({symbol}{change:.2f}%) &nbsp;&nbsp; | &nbsp;&nbsp; "
             except: continue
     except:
-        return "LOADING MARKET DATA... PLEASE WAIT..."
+        return "Market Data Loading... Please Wait..."
         
-    return "  |  ".join(text_parts) * 5 # שכפול לאורך
+    return text * 5
 
-# --- הפונקציה החשובה: סורק הפריצות ---
-def run_breakout_scanner():
-    # רשימת 30 המניות הנזילות ביותר (אפשר להרחיב ל-500 אבל זה יקח זמן)
-    tickers = [
-        'NVDA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AMD', 'JPM', 'V', 
-        'LLY', 'AVGO', 'WMT', 'XOM', 'MA', 'PG', 'COST', 'JNJ', 'HD', 'CVX', 
-        'BAC', 'KO', 'PEP', 'NFLX', 'INTC', 'CRM', 'ORCL', 'QCOM', 'LIN', 'ADBE'
-    ]
-    
+@st.cache_data(ttl=900)
+def get_news_hebrew():
+    url = "https://news.google.com/rss/search?q=וול+סטריט+OR+טכנולוגיה+OR+בינה+מלאכותית&hl=he&gl=IL&ceid=IL:he"
+    try:
+        feed = feedparser.parse(url)
+        return feed.entries[:6]
+    except: return []
+
+def run_scanner():
+    # רשימת מניות טכנולוגיה מובילות
+    tickers = ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AMD', 'NFLX', 'INTC', 'CRM', 'ORCL', 'QCOM', 'ADBE']
     results = []
     
-    # הורדה במכה אחת (הרבה יותר מהר)
-    data = yf.download(tickers, period="1y", group_by='ticker', progress=False)
+    data = yf.download(tickers, period="6mo", group_by='ticker', progress=False)
     
     for t in tickers:
         try:
             df = data[t].dropna()
-            if len(df) < 150: continue
+            if len(df) < 50: continue
             
-            # 1. חישוב אינדיקטורים
-            curr_price = df['Close'].iloc[-1]
-            sma150 = ta.trend.sma_indicator(df['Close'], window=150).iloc[-1]
+            curr = df['Close'].iloc[-1]
             sma50 = ta.trend.sma_indicator(df['Close'], window=50).iloc[-1]
             rsi = ta.momentum.rsi(df['Close'], window=14).iloc[-1]
-            
             vol_curr = df['Volume'].iloc[-1]
             vol_avg = df['Volume'].tail(20).mean()
             
-            # 2. בדיקת הקריטריונים שלך (Strict Criteria)
-            
-            # א. מגמה עולה: מחיר מעל ממוצע 150
-            cond_trend = curr_price > sma150
-            
-            # ב. ווליום חזק: לפחות 20% מעל הממוצע (פריצה)
-            cond_vol = vol_curr > (vol_avg * 1.2)
-            
-            # ג. RSI: לא קניית יתר קיצונית (מתחת ל-75) אבל חיובי (מעל 50)
-            cond_rsi = 50 < rsi < 75
-            
-            # ד. קרוב לממוצע (לא ברח מדי) - עד 15% מעל ממוצע 50
-            dist_from_sma50 = ((curr_price / sma50) - 1) * 100
-            cond_near = dist_from_sma50 < 15
-            
-            # חישוב ציון התאמה
+            # לוגיקת סורק פשוטה ויעילה
             score = 0
-            if cond_trend: score += 1
-            if cond_vol: score += 1
-            if cond_rsi: score += 1
-            if cond_near: score += 1
+            if curr > sma50: score += 1
+            if rsi < 70 and rsi > 40: score += 1
+            if vol_curr > vol_avg: score += 1
             
-            # אם עומד ברוב התנאים - הוסף לרשימה
-            if score >= 3:
-                # חישוב יעדים
-                atr = ta.volatility.average_true_range(df['High'], df['Low'], df['Close']).iloc[-1]
-                stop = curr_price - (atr * 2)
-                target = curr_price + (atr * 4)
-                
+            if score >= 2: # מציג מניות עם פוטנציאל
                 results.append({
                     "Symbol": t,
-                    "Price": curr_price,
-                    "Change": ((curr_price - df['Close'].iloc[-2])/df['Close'].iloc[-2])*100,
-                    "Vol Ratio": vol_curr / vol_avg,
+                    "Price": curr,
                     "RSI": rsi,
-                    "Stop Loss": stop,
-                    "Target": target,
-                    "Reason": "Volume Breakout" if cond_vol else "Trend Following"
+                    "Vol Ratio": vol_curr / vol_avg,
+                    "Status": "Strong Buy" if score == 3 else "Buy"
                 })
         except: continue
-        
+    
     return pd.DataFrame(results)
 
-# --- ממשק משתמש ---
+# --- 4. ממשק המשתמש (UI) ---
 
-# 1. טיקר עליון
-ticker_html = get_ticker_string()
+# טיקר עליון
+ticker_txt = get_market_sentiment()
 st.markdown(f"""
 <div class="ticker-container">
-    <div class="ticker-text">{ticker_html}</div>
+    <div class="ticker-text">{ticker_txt}</div>
 </div>
 """, unsafe_allow_html=True)
 
-st.title("⚡ PRO BREAKOUT TERMINAL")
+# כותרת ראשית
+c1, c2 = st.columns([1, 5])
+with c1:
+    st.image("https://cdn-icons-png.flaticon.com/512/3233/3233499.png", width=80)
+with c2:
+    st.title("FUTURE TRADE | AI TERMINAL")
+    st.markdown("מערכת מסחר אלגוריתמית מתקדמת")
 
-# טאבים
-tab_scanner, tab_chart, tab_news = st.tabs(["🚀 סורק פריצות (Top 10)", "📊 ניתוח גרפי", "📰 חדשות ארה\"ב"])
+# טאבים מעוצבים
+tabs = st.tabs(["💎 סורק AI", "📈 גרפים וניתוח", "📰 חדשות ועדכונים"])
 
-# --- טאב 1: סורק הפריצות ---
-with tab_scanner:
-    st.header("איתור מניות לפריצה (Breakout Scanner)")
-    st.markdown("""
-    **קריטריונים לסריקה:**
-    * ✅ מגמה עולה (מעל ממוצע 150)
-    * ✅ ווליום חריג (כניסת כסף חכם)
-    * ✅ פוטנציאל רווח (RSI לא בשמיים)
-    """)
+# --- טאב 1: סורק ---
+with tabs[0]:
+    st.header("סורק הזדמנויות חכם")
+    st.markdown("מאתר מניות במומנטום חיובי עם אישור ווליום.")
     
-    if st.button("🔎 הרץ סריקת שוק עכשיו"):
-        with st.spinner("סורק את השוק אחר הזדמנויות..."):
-            df_scan = run_breakout_scanner()
-            
-            if not df_scan.empty:
-                # מיון לפי יחס ווליום (הכי הרבה כסף נכנס)
-                df_scan = df_scan.sort_values(by="Vol Ratio", ascending=False).head(10)
-                
-                st.success(f"נמצאו {len(df_scan)} מניות בפריצה!")
-                
+    if st.button("🚀 הפעל סריקת שוק"):
+        with st.spinner("מנתח ביג דאטה..."):
+            df = run_scanner()
+            if not df.empty:
+                df = df.sort_values(by="Vol Ratio", ascending=False)
                 st.dataframe(
-                    df_scan.style.format({
-                        "Price": "${:.2f}",
-                        "Change": "{:+.2f}%",
-                        "Vol Ratio": "{:.1f}x",
-                        "RSI": "{:.0f}",
-                        "Stop Loss": "${:.2f}",
-                        "Target": "${:.2f}"
-                    }).background_gradient(subset=['Vol Ratio'], cmap='Greens'),
+                    df.style.format({"Price": "${:.2f}", "RSI": "{:.1f}", "Vol Ratio": "{:.2f}x"})
+                    .background_gradient(subset=['RSI'], cmap='magma'),
                     use_container_width=True,
                     height=500
                 )
             else:
-                st.warning("לא נמצאו מניות העונות לקריטריונים המחמירים כרגע. השוק במצב המתנה.")
+                st.warning("לא נמצאו איתותים חזקים כרגע.")
 
 # --- טאב 2: גרפים ---
-with tab_chart:
-    st.header("ניתוח טכני")
-    symbol = st.selectbox("בחר מניה:", ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMD', 'AMZN', 'GOOGL'])
+with tabs[1]:
+    col_sel, col_chart = st.columns([1, 3])
     
-    if symbol:
-        stock = yf.Ticker(symbol)
-        df = stock.history(period="1y")
+    with col_sel:
+        st.subheader("בחר נכס")
+        symbol = st.selectbox("", ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'BTC-USD', 'ETH-USD'], label_visibility="collapsed")
         
-        # אינדיקטורים לגרף
-        df['SMA150'] = ta.trend.sma_indicator(df['Close'], window=150)
-        df['SMA50'] = ta.trend.sma_indicator(df['Close'], window=50)
-        
-        fig = go.Figure()
-        fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Price'))
-        fig.add_trace(go.Scatter(x=df.index, y=df['SMA150'], line=dict(color='orange', width=2), name='SMA 150'))
-        fig.add_trace(go.Scatter(x=df.index, y=df['SMA50'], line=dict(color='cyan', width=1), name='SMA 50'))
-        
-        fig.update_layout(template="plotly_dark", height=600, xaxis_rangeslider_visible=False)
-        st.plotly_chart(fig, use_container_width=True)
+        # נתונים מהירים בצד
+        if symbol:
+            stock = yf.Ticker(symbol)
+            hist = stock.history(period="1y")
+            curr = hist['Close'].iloc[-1]
+            change = ((curr - hist['Open'].iloc[0]) / hist['Open'].iloc[0]) * 100
+            
+            st.markdown("---")
+            st.metric("מחיר אחרון", f"${curr:,.2f}", f"{change:.2f}%")
+            st.metric("גבוה יומי", f"${hist['High'].iloc[-1]:,.2f}")
+            st.metric("נמוך יומי", f"${hist['Low'].iloc[-1]:,.2f}")
+
+    with col_chart:
+        if symbol:
+            st.subheader(f"ניתוח טכני: {symbol}")
+            
+            # גרף מתקדם
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close'], name='Price'))
+            
+            fig.update_layout(
+                template="plotly_dark",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                height=600,
+                xaxis_rangeslider_visible=False,
+                margin=dict(l=0, r=0, t=20, b=0)
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 # --- טאב 3: חדשות ---
-with tab_news:
-    st.header("עדכונים מוול-סטריט (עברית)")
-    news = get_google_news_us_hebrew()
+with tabs[2]:
+    st.header("עדכונים חיים מהשווקים")
+    news = get_news_hebrew()
+    
     if news:
         col1, col2 = st.columns(2)
         for i, item in enumerate(news):
-            with (col1 if i%2==0 else col2):
+            with (col1 if i % 2 == 0 else col2):
                 st.markdown(f"""
-                <div style="background:#111; padding:15px; margin-bottom:10px; border-radius:5px; border-left:3px solid #00ff41;">
-                    <a href="{item.link}" target="_blank" style="color:white; font-weight:bold; text-decoration:none;">{item.title}</a>
-                    <div style="color:#666; font-size:12px; margin-top:5px;">{item.source} | {item.published[:16]}</div>
+                <div class="news-card">
+                    <a href="{item.link}" target="_blank" style="text-decoration:none; color:#00d2ff; font-weight:bold; font-size:18px;">
+                        {item.title}
+                    </a>
+                    <div style="margin-top:10px; color:#aaa; font-size:12px;">
+                        {item.source.title} | {item.published[:16]}
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
-    else:
-        st.info("טוען חדשות...")
