@@ -2,5 +2,6 @@ streamlit
 yfinance
 pandas
 plotly
+matplotlib
 feedparser
 beautifulsoup4
