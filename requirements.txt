@@ -5,3 +5,4 @@ plotly
 ta
 feedparser
 beautifulsoup4
+lxml
