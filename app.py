@@ -3,110 +3,99 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 import ta
+import feedparser
+from datetime import datetime
 
-# --- הגדרת עמוד (חובה שורה ראשונה) ---
-st.set_page_config(page_title="Infinity Trader", layout="wide", page_icon="⚡")
+# --- הגדרת עמוד ---
+st.set_page_config(page_title="Wall St. Hebrew Terminal", layout="wide", page_icon="🇺🇸")
 
-# --- עיצוב CSS אגרסיבי (Cyberpunk/Fintech Style) ---
+# --- עיצוב CSS מתקדם (Infinity Dark Mode) ---
 st.markdown("""
 <style>
-    /* ייבוא פונט מודרני */
-    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap');
-
-    /* רקע כללי - גרדיאנט עמוק */
+    /* פונטים ורקע */
+    @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700&display=swap');
+    
     .stApp {
-        background: radial-gradient(circle at 10% 20%, #0f172a 0%, #000000 90%);
-        font-family: 'Rajdhani', sans-serif;
-        color: white;
+        background-color: #050505;
+        color: #e0e0e0;
+        font-family: 'Heebo', sans-serif; /* פונט עברי מודרני */
     }
 
-    /* הסתרת תפריטים מיותרים */
+    /* הסתרת תפריטים */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
-
-    /* --- טיקר זז (Ticker Tape) --- */
+    
+    /* --- טיקר משודרג (איטי + עוצר במעבר עכבר) --- */
     .ticker-wrap {
         width: 100%;
         background-color: #111;
         overflow: hidden;
         white-space: nowrap;
-        border-bottom: 2px solid #00ff41;
-        padding: 10px 0;
+        border-bottom: 1px solid #333;
+        border-top: 1px solid #333;
+        padding: 8px 0;
         margin-bottom: 20px;
     }
     .ticker {
         display: inline-block;
-        animation: marquee 20s linear infinite;
-        font-size: 1.2rem;
-        font-weight: bold;
-        color: #00ff41;
+        animation: marquee 60s linear infinite; /* הואט ל-60 שניות */
+        font-size: 1.1rem;
+        font-weight: 400;
+        color: #00ff88;
+    }
+    .ticker-wrap:hover .ticker {
+        animation-play-state: paused; /* עוצר כשעוברים עם העכבר! */
+        cursor: default;
     }
     @keyframes marquee {
         0% { transform: translateX(100%); }
         100% { transform: translateX(-100%); }
     }
 
-    /* --- כרטיסיות זכוכית (Glass Cards) --- */
-    div.css-1r6slb0, div[data-testid="stMetric"], div.stDataFrame {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 15px;
-        padding: 20px;
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-        transition: transform 0.3s ease;
+    /* כרטיסי מידע */
+    div[data-testid="metric-container"] {
+        background-color: #0f0f0f;
+        border: 1px solid #222;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        transition: 0.3s;
     }
-    div[data-testid="stMetric"]:hover {
-        transform: translateY(-5px);
-        border: 1px solid #00ff41;
-        box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
+    div[data-testid="metric-container"]:hover {
+        border-color: #00ff88;
+        transform: translateY(-2px);
     }
 
-    /* כותרות זוהרות */
-    h1, h2, h3 {
-        color: #fff;
-        text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-        letter-spacing: 2px;
-        text-transform: uppercase;
-    }
-
-    /* כפתורים עתידניים */
-    .stButton > button {
-        background: linear-gradient(45deg, #00ff41, #008f24);
-        color: black;
-        border: none;
-        padding: 12px 24px;
+    /* כרטיסי חדשות */
+    .news-card {
+        background-color: #111;
+        border-right: 4px solid #007bff; /* פס כחול מימין */
+        padding: 15px;
+        margin-bottom: 15px;
         border-radius: 5px;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        box-shadow: 0 0 10px #00ff41;
+    }
+    .news-title {
+        color: #fff;
+        font-size: 16px;
+        font-weight: bold;
+        text-decoration: none;
+        display: block;
+        margin-bottom: 5px;
+    }
+    .news-title:hover { color: #007bff; }
+    .news-meta { color: #666; font-size: 12px; }
+
+    /* כפתורים */
+    .stButton > button {
+        background: linear-gradient(90deg, #007bff, #0056b3);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-weight: bold;
         width: 100%;
     }
-    .stButton > button:hover {
-        box-shadow: 0 0 20px #00ff41, 0 0 40px #00ff41;
-        color: white;
-    }
+    .stButton > button:hover { background: #004494; }
     
-    /* תגית BUY/SELL */
-    .badge-buy {
-        background-color: rgba(0, 255, 65, 0.2);
-        color: #00ff41;
-        padding: 5px 10px;
-        border-radius: 4px;
-        border: 1px solid #00ff41;
-        font-weight: bold;
-    }
-    .badge-sell {
-        background-color: rgba(255, 42, 109, 0.2);
-        color: #ff2a6d;
-        padding: 5px 10px;
-        border-radius: 4px;
-        border: 1px solid #ff2a6d;
-        font-weight: bold;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -114,36 +103,63 @@ st.markdown("""
 
 @st.cache_data(ttl=300)
 def get_live_ticker_data():
-    """מביא נתונים מהירים לטיקר הרץ"""
-    tickers = ['BTC-USD', 'ETH-USD', 'NVDA', 'AAPL', 'TSLA', 'SPY', 'QQQ']
+    """מביא נתונים לטיקר"""
+    tickers = ['^GSPC', '^IXIC', '^DJI', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'GOOGL', 'META', 'AMD']
+    display_names = {'^GSPC': 'S&P 500', '^IXIC': 'NASDAQ', '^DJI': 'DOW JONES'}
+    
     data_str = ""
     try:
-        df = yf.download(tickers, period="1d", interval="1m", group_by='ticker', progress=False)
+        # משיכה מהירה
+        df = yf.download(tickers, period="1d", interval="1d", group_by='ticker', progress=False)
+        
         for t in tickers:
             try:
-                # טיפול בנתונים מרובי רמות או רמה אחת
+                name = display_names.get(t, t)
                 if len(tickers) > 1:
                     price = df[t]['Close'].iloc[-1]
-                    open_p = df[t]['Open'].iloc[0]
+                    prev = df[t]['Open'].iloc[0] # משתמש בפתיחה כבסיס לשינוי יומי
                 else:
                     price = df['Close'].iloc[-1]
-                    open_p = df['Open'].iloc[0]
+                    prev = df['Open'].iloc[0]
                     
-                change = ((price - open_p) / open_p) * 100
+                change = ((price - prev) / prev) * 100
                 symbol = "▲" if change >= 0 else "▼"
-                data_str += f"&nbsp;&nbsp;&nbsp;&nbsp; {t}: ${price:.2f} ({symbol}{change:.2f}%) "
+                color = "#00ff88" if change >= 0 else "#ff2a6d"
+                
+                # בניית המחרוזת עם צבעים (HTML בתוך המרקיו פחות נתמך, אז נשתמש בסימנים)
+                data_str += f"{name}: ${price:,.2f} ({symbol}{change:.2f}%) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; "
             except: continue
     except:
-        data_str = "MARKET DATA LOADING..."
-    return data_str
+        data_str = "טוען נתוני שוק בזמן אמת..."
+        
+    return data_str * 5 # משכפל כדי שייראה רציף
 
-def get_pro_data(ticker):
+@st.cache_data(ttl=600)
+def get_us_economy_news_hebrew():
+    """חדשות ארהב בעברית דרך גוגל"""
+    # שאילתה חכמה: וול סטריט או פדרל ריזרב או כלכלת ארהב, מאתרים בישראל בעברית
+    rss_url = "https://news.google.com/rss/search?q=וול+סטריט+OR+הפדרל+ריזרב+OR+כלכלת+ארהב+OR+נאסדק&hl=he&gl=IL&ceid=IL:he"
+    
+    try:
+        feed = feedparser.parse(rss_url)
+        news_items = []
+        for entry in feed.entries[:8]:
+            news_items.append({
+                "title": entry.title,
+                "link": entry.link,
+                "published": entry.published[:16],
+                "source": entry.source.title
+            })
+        return news_items
+    except:
+        return []
+
+def get_stock_analysis(ticker):
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1y")
         if len(hist) < 150: return None
         
-        # אינדיקטורים
         hist['SMA50'] = ta.trend.sma_indicator(hist['Close'], window=50)
         hist['SMA200'] = ta.trend.sma_indicator(hist['Close'], window=200)
         hist['RSI'] = ta.momentum.rsi(hist['Close'], window=14)
@@ -151,71 +167,65 @@ def get_pro_data(ticker):
         return hist
     except: return None
 
-# --- טיקר רץ (Ticker Tape) ---
-ticker_html = get_live_ticker_data()
+# --- טיקר עליון ---
+ticker_text = get_live_ticker_data()
 st.markdown(f"""
 <div class="ticker-wrap">
-    <div class="ticker">{ticker_html} &nbsp;&nbsp; | &nbsp;&nbsp; {ticker_html}</div>
+    <div class="ticker">{ticker_text}</div>
 </div>
 """, unsafe_allow_html=True)
 
 # --- כותרת ראשית ---
-col_head1, col_head2 = st.columns([4, 1])
-with col_head1:
-    st.title("INFINITY TRADER")
-    st.caption("AI-POWERED MARKET INTELLIGENCE SYSTEM")
-with col_head2:
-    st.image("https://img.icons8.com/fluency/96/bullish.png", width=70) # אייקון בולט
+st.title("🇺🇸 US MARKETS | PRO TERMINAL")
+st.markdown("מערכת ניתוח מניות וחדשות ארה'ב בזמן אמת")
 
-st.markdown("---")
+# --- פריסת דף (Layout) ---
+col_main, col_sidebar = st.columns([3, 1])
 
-# --- תפריט בחירה מעוצב ---
-selected_ticker = st.selectbox("", ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL', 'META', 'AMD', 'COIN'], index=0, label_visibility="collapsed")
+# --- צד שמאל (תפריט וחדשות) ---
+with col_sidebar:
+    st.header("חדשות ארה\"ב 📰")
+    st.caption("עדכונים חיים מוול-סטריט (בעברית)")
+    
+    news = get_us_economy_news_hebrew()
+    if news:
+        for item in news:
+            st.markdown(f"""
+            <div class="news-card">
+                <a href="{item['link']}" target="_blank" class="news-title">{item['title']}</a>
+                <div class="news-meta">
+                    <span>{item['source']}</span> | <span>{item['published']}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("טוען חדשות...")
 
-# --- גוף האפליקציה ---
-if selected_ticker:
-    with st.spinner(f'ACCESSING MAINFRAME: {selected_ticker}...'):
-        df = get_pro_data(selected_ticker)
+# --- צד ימין (גרפים ונתונים) ---
+with col_main:
+    # בחירת מניה
+    selected_ticker = st.selectbox("בחר מניה לניתוח:", 
+                                  ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL', 'META', 'AMD', 'NFLX', 'INTC', 'COIN'],
+                                  index=0)
+    
+    if selected_ticker:
+        df = get_stock_analysis(selected_ticker)
         
         if df is not None:
-            # נתונים אחרונים
             curr = df['Close'].iloc[-1]
-            prev = df['Close'].iloc[-2]
-            change = ((curr - prev) / prev) * 100
+            change = ((curr - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100
             rsi = df['RSI'].iloc[-1]
             sma200 = df['SMA200'].iloc[-1]
-            vol = df['Volume'].iloc[-1]
             
-            # קביעת סטטוס
-            status = "NEUTRAL"
-            badge_class = "badge-buy" # Default styling
+            # כרטיסי מידע
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("מחיר אחרון", f"${curr:.2f}", f"{change:.2f}%")
+            m2.metric("RSI (מומנטום)", f"{rsi:.1f}", "Overbought" if rsi>70 else "Oversold" if rsi<30 else "Neutral")
+            m3.metric("מגמה ראשית (200)", "BULLISH" if curr > sma200 else "BEARISH", delta_color="normal")
+            m4.metric("ווליום יומי", f"{df['Volume'].iloc[-1]/1000000:.1f}M")
             
-            if curr > sma200 and rsi < 70: 
-                status = "STRONG BUY"
-                badge_class = "badge-buy"
-            elif curr < sma200: 
-                status = "SELL TREND"
-                badge_class = "badge-sell"
-            
-            # --- כרטיסיות מידע (Top Cards) ---
-            # שימוש ב-Columns ליצירת גריד
-            c1, c2, c3, c4 = st.columns(4)
-            
-            c1.metric("CURRENT PRICE", f"${curr:.2f}", f"{change:.2f}%")
-            c2.metric("RSI STRENGTH", f"{rsi:.1f}", "Overbought" if rsi>70 else "Oversold" if rsi<30 else "Normal")
-            c3.metric("24H VOLUME", f"{vol/1000000:.1f}M")
-            
-            # כרטיס הסטטוס המיוחד
-            with c4:
-                st.markdown(f"""
-                <div style="text-align: center; padding: 10px;">
-                    <div style="font-size: 12px; color: #888;">AI RECOMMENDATION</div>
-                    <div class="{badge_class}" style="font-size: 18px; margin-top: 5px;">{status}</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # --- גרף מתקדם (Interactive Chart) ---
-            st.markdown("### 📈 PRICE ACTION ANALYZER")
+            # גרף
+            st.subheader(f"ניתוח טכני: {selected_ticker}")
             
             fig = go.Figure()
             
@@ -225,35 +235,23 @@ if selected_ticker:
                             low=df['Low'], close=df['Close'],
                             name='Price'))
             
-            # ממוצעים נעים
-            fig.add_trace(go.Scatter(x=df.index, y=df['SMA50'], line=dict(color='#00d4ff', width=1), name='SMA 50'))
-            fig.add_trace(go.Scatter(x=df.index, y=df['SMA200'], line=dict(color='#ff00d4', width=2), name='SMA 200'))
+            # ממוצעים
+            fig.add_trace(go.Scatter(x=df.index, y=df['SMA50'], line=dict(color='#00d4ff', width=1.5), name='SMA 50'))
+            fig.add_trace(go.Scatter(x=df.index, y=df['SMA200'], line=dict(color='#ff00d4', width=1.5), name='SMA 200'))
             
-            # עיצוב הגרף להיראות "מקצועי"
             fig.update_layout(
                 template="plotly_dark",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                height=600,
+                height=550,
                 margin=dict(l=0, r=0, t=30, b=0),
                 xaxis_rangeslider_visible=False,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                legend=dict(orientation="h", y=1, x=0)
             )
-            
-            # הסרת קווי רשת מיותרים
-            fig.update_xaxes(showgrid=False)
-            fig.update_yaxes(showgrid=True, gridcolor='#222')
             
             st.plotly_chart(fig, use_container_width=True)
             
-        else:
-            st.error("DATA ERROR. PLEASE REFRESH.")
-
-# --- כפתור פעולה ---
-st.markdown("---")
-c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
-with c_btn2:
-    if st.button("🚀 SCAN FOR NEW OPPORTUNITIES"):
-        st.toast("Scanning Global Markets...", icon="🌍")
-        st.toast("Analyzing Volatility...", icon="📊")
-        st.toast("Scan Complete: No Priority Signals Found.", icon="✅")
+            # כפתור סריקה
+            st.markdown("---")
+            if st.button(f"🔍 הרץ סריקת עומק על {selected_ticker}"):
+                st.success("האלגוריתם מזהה תבנית פריצה אפשרית (Demo Signal).")
